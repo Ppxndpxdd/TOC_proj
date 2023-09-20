@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Game</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        .maze-container {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .maze {
+            display: grid;
+            grid-gap: 2px;
+        }
+
+        .cell {
+            width: 20px;
+            height: 20px;
+            background-color: #333;
+            border: 1px solid #000;
+            position: relative;
+        }
+
+        .start {
+            background-color: green;
+        }
+
+        .end {
+            background-color: red;
+        }
+
+        .player {
+            background-color: blue;
+        }
+
+        .obstacle {
+            background-color: #ffaa00;
+        }
+
+        .controls {
+            margin-right: 20px;
+        }
+
+        .items-bar {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-right: 20px;
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .item {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #fff;
+            transition: background-color 0.3s ease;
+        }
+
+        .item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .reset-button {
+            margin-top: 10px;
+            background-color: #ff5722;
+            color: #fff;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .reset-button:hover {
+            background-color: #e64a19;
+        }
+
+        .item-label {
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .item-icon {
+            font-size: 20px;
+        }
+
+        .start-draggable,
+        .end-draggable,
+        .obstacle-draggable {
+            cursor: move;
+        }
+
+        .speed-control {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="maze-container">
+        <div class="items-bar">
+            <div class="item start-draggable" draggable="true" ondragstart="drag(event)" id="start-item">
+                <div class="item-icon">🚀</div>
+                <div class="item-label">Start</div>
+            </div>
+            <div class="item end-draggable" draggable="true" ondragstart="drag(event)" id="end-item">
+                <div class="item-icon">🏁</div>
+                <div class="item-label">End</div>
+            </div>
+            <div class="item obstacle-draggable" draggable="true" ondragstart="drag(event)" id="obstacle-item">
+                <div class="item-icon">🧱</div>
+                <div class="item-label">Obstacle</div>
+            </div>
+            <button onclick="randomizeMaze()" class="reset-button">Randomize Maze</button>
+        </div>
+        <div class="maze" id="maze" ondragover="allowDrop(event)" ondrop="drop(event)"></div>
+        <div class="controls">
+            <label for="mazeSize">Maze Size:</label>
+            <input type="number" id="mazeSize" min="2" value="10">
+            <button onclick="generateMaze()">Generate Maze</button>
+            <button onclick="startGame()">Start</button>
+            <button onclick="resetMaze()" class="reset-button">Reset</button>
+            <div class="speed-control">
+                <label for="animationSpeed">Animation Step Speed (ms):</label>
+                <input type="number" id="animationSpeed" min="100" value="200">
+                <button onclick="changeSpeed()" class="reset-button">Change Speed</button>
+                <p id="speedText">Current Speed: 200 ms</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let playerCell;
+        let endCell;
+        let mazeSize;
+        let isGameStarted = false;
+        let mazeCells = [];
+        let isStartPlaced = false;
+        let isEndPlaced = false;
+        let animationSpeed = 200; // Default animation speed
+
+        function generateMaze() {
+            mazeSize = parseInt(document.getElementById("mazeSize").value);
+            const mazeContainer = document.getElementById("maze");
+            mazeContainer.innerHTML = "";
+
+            mazeContainer.style.gridTemplateColumns = `repeat(${mazeSize}, 20px)`;
+
+            mazeCells = [];
+
+            for (let row = 0; row < mazeSize; row++) {
+                for (let col = 0; col < mazeSize; col++) {
+                    const cell = document.createElement("div");
+                    cell.className = "cell";
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    mazeCells.push(cell);
+                    mazeContainer.appendChild(cell);
+
+                    cell.addEventListener("drop", drop);
+                    cell.addEventListener("dragover", allowDrop);
+                }
+            }
+
+            playerCell = null;
+            endCell = null;
+            isGameStarted = false;
+            isStartPlaced = false;
+            isEndPlaced = false;
+        }
+
+        function startGame() {
+            if (!playerCell || !endCell) {
+                alert("Please place the player and end point on the maze.");
+                return;
+            }
+
+            if (!isGameStarted) {
+                isGameStarted = true;
+                findPath();
+            } else {
+                alert("Game already started. Reset the maze to start again.");
+            }
+        }
+
+        function drag(event) {
+            event.dataTransfer.setData("text", event.target.id);
+        }
+
+        function allowDrop(event) {
+            event.preventDefault();
+        }
+
+        function drop(event) {
+            event.preventDefault();
+            const data = event.dataTransfer.getData("text");
+
+            if (data === "start-item" && !isStartPlaced) {
+                if (playerCell) playerCell.classList.remove("player", "start");
+                playerCell = event.target;
+                playerCell.classList.add("player", "start");
+                isStartPlaced = true;
+            } else if (data === "end-item" && !isEndPlaced) {
+                if (endCell) endCell.classList.remove("end");
+                endCell = event.target;
+                endCell.classList.add("end");
+                isEndPlaced = true;
+            } else if (data === "obstacle-item") {
+                const obstacleCell = event.target;
+                if (!obstacleCell.classList.contains("start") && !obstacleCell.classList.contains("end")) {
+                    obstacleCell.classList.add("obstacle");
+                }
+            }
+        }
+
+        function findPath() {
+            const openSet = [playerCell];
+            const cameFrom = new Map();
+            const gScore = new Map();
+
+            gScore.set(playerCell, 0);
+
+            while (openSet.length > 0) {
+                const current = openSet.shift();
+
+                if (current === endCell) {
+                    reconstructPath(cameFrom, current);
+                    return;
+                }
+
+                const neighbors = getNeighbors(current);
+                for (const neighbor of neighbors) {
+                    if (!neighbor.classList.contains("obstacle")) {
+                        const tentativeGScore = gScore.get(current) + 1;
+
+                        if (!gScore.has(neighbor) || tentativeGScore < gScore.get(neighbor)) {
+                            cameFrom.set(neighbor, current);
+                            gScore.set(neighbor, tentativeGScore);
+
+                            if (!openSet.includes(neighbor)) {
+                                openSet.push(neighbor);
+                            }
+                        }
+                    }
+                }
+            }
+
+            alert("No path found. Game over.");
+            isGameStarted = false;
+        }
+
+        function getNeighbors(cell) {
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+            const neighbors = [];
+
+            const leftCell = mazeCells.find(c => parseInt(c.dataset.row) === row && parseInt(c.dataset.col) === col - 1);
+            const rightCell = mazeCells.find(c => parseInt(c.dataset.row) === row && parseInt(c.dataset.col) === col + 1);
+            const upCell = mazeCells.find(c => parseInt(c.dataset.row) === row - 1 && parseInt(c.dataset.col) === col);
+            const downCell = mazeCells.find(c => parseInt(c.dataset.row) === row + 1 && parseInt(c.dataset.col) === col);
+
+            if (leftCell) neighbors.push(leftCell);
+            if (rightCell) neighbors.push(rightCell);
+            if (upCell) neighbors.push(upCell);
+            if (downCell) neighbors.push(downCell);
+
+            return neighbors;
+        }
+
+        function reconstructPath(cameFrom, current) {
+            const path = [current];
+            while (cameFrom.has(current)) {
+                current = cameFrom.get(current);
+                path.unshift(current);
+            }
+
+            animatePath(path);
+        }
+
+        function animatePath(path) {
+            let i = 1;
+            function step() {
+                if (i < path.length) {
+                    const current = path[i - 1];
+                    const next = path[i];
+                    playerCell.classList.remove("player");
+                    next.classList.add("player");
+                    playerCell = next;
+                    i++;
+                    setTimeout(step, animationSpeed); // Use the specified animation speed
+                } else {
+                    alert("Path found in " + (path.length - 1) + " steps!");
+                    isGameStarted = false;
+                }
+            }
+
+            step();
+        }
+
+        function resetMaze() {
+            const mazeContainer = document.getElementById("maze");
+            mazeContainer.innerHTML = "";
+            generateMaze();
+        }
+
+        function changeSpeed() {
+            const newSpeed = parseInt(document.getElementById("animationSpeed").value);
+            if (newSpeed >= 10) {
+                animationSpeed = newSpeed;
+                document.getElementById("speedText").textContent = "Current Speed: " + newSpeed + " ms";
+            } else {
+                alert("Speed must be at least 100 ms.");
+            }
+        }
+
+        function randomizeMaze() {
+            if (isGameStarted) {
+                alert("Please finish the current game before randomizing the maze.");
+                return;
+            }
+
+            // Clear existing obstacles
+            for (const cell of mazeCells) {
+                if (!cell.classList.contains("start") && !cell.classList.contains("end")) {
+                    cell.classList.remove("obstacle");
+                }
+            }
+
+            // Randomly set obstacles until no direct path exists, and the end point is not obstructed
+            do {
+                for (const cell of mazeCells) {
+                    if (!cell.classList.contains("start") && !cell.classList.contains("end")) {
+                        // Randomly set 30% of cells as obstacles
+                        if (Math.random() < 0.3) {
+                            cell.classList.add("obstacle");
+                        }
+                    }
+                }
+            } while (hasDirectPath(playerCell, endCell) || isEndPointObstructed(endCell));
+        }
+
+        function isEndPointObstructed(endCell) {
+            const path = findPathToTarget(playerCell, endCell);
+            return path.length === 0;
+        }
+
+        // This function finds a path from startCell to targetCell
+        function findPathToTarget(startCell, targetCell) {
+            const openSet = [startCell];
+            const cameFrom = new Map();
+
+            while (openSet.length > 0) {
+                const current = openSet.shift();
+
+                if (current === targetCell) {
+                    // Reconstruct the path
+                    const path = [current];
+                    while (cameFrom.has(current)) {
+                        current = cameFrom.get(current);
+                        path.unshift(current);
+                    }
+                    return path;
+                }
+
+                const neighbors = getNeighbors(current);
+                for (const neighbor of neighbors) {
+                    if (!neighbor.classList.contains("obstacle") && !cameFrom.has(neighbor)) {
+                        cameFrom.set(neighbor, current);
+                        openSet.push(neighbor);
+                    }
+                }
+            }
+
+            // No path found
+            return [];
+        }
+
+        generateMaze();
+    </script>
+</body>
+
+</html>
